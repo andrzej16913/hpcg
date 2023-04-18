@@ -5,6 +5,7 @@
 #ifndef HPCG_CALLER_HPP
 #define HPCG_CALLER_HPP
 
+#include <vector>
 #include "Vector.hpp"
 #include "SparseMatrix.hpp"
 #include "TestNorms.hpp"
@@ -26,6 +27,6 @@
 
 int callKernel(const SparseMatrix& A, const Vector& b, Vector& x,
                 const int maxIter, TestNormsData testNormsData,
-                double* times, bool doPreconditioning);
+                std::vector<double> times, bool doPreconditioning);
 
 #endif //HPCG_CALLER_HPP

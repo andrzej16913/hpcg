@@ -31,6 +31,8 @@ namespace fpga {
         char* nonZeros;
         int localNumberOfRows;
         int localNumberOfColumns;
+        bool isWaxpbyOptimized;
+        bool isDotProductOptimized;
     };
 
     struct Row {
@@ -47,10 +49,12 @@ namespace fpga {
         matrix.nonZeros = nonZeros;
         matrix.localNumberOfRows = localNumberOfRows;
         matrix.localNumberOfColumns = localNumberOfColumns;
+        matrix.isWaxpbyOptimized = false;
+        matrix.isDotProductOptimized = false;
         return matrix;
     }
 
-    inline void getRow(Row row, FPGAMatrix matrix, int index) {
+    inline void getRow(Row& row, FPGAMatrix matrix, int index) {
         int i = index * MAX_ROW_LENGTH;
         row.values = matrix.values + i;
         row.indexes = matrix.indexes + i;

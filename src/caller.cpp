@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <iostream>
 #include <string>
+#include <vector>
 
 // XRT includes
 #include <experimental/xrt_xclbin.h>
@@ -26,7 +27,7 @@
 
 int callKernel(const SparseMatrix & A, const Vector & b, Vector & x,
                const int maxIter, TestNormsData testNormsData,
-               double * times, bool doPreconditioning) {
+               std::vector<double> times, bool doPreconditioning) {
 
     // Computing sizes of buffers
     constexpr size_t AValuesSize = sizeof(double) * MATRIX_SIZE;
@@ -37,7 +38,7 @@ int callKernel(const SparseMatrix & A, const Vector & b, Vector & x,
 
     // Definitions of settings
     std::ostream& outStream = std::cerr;
-    std::string binaryFile = "./hpcg.xclbin";
+    std::string binaryFile = "./run_CG.xclbin";
     int device_index = 0;
     int error = 0;
 
@@ -106,7 +107,7 @@ int callKernel(const SparseMatrix & A, const Vector & b, Vector & x,
     // Execute kernel and measure total time
     outStream << "Execution of the kernel\n";
     double startTime = mytimer();
-    auto run = kernel(boAValues, boAIndexes, boANonZero, A.localNumberOfRows, A.localNumberOfColumns,
+    auto run = kernel(boAValues, boAIndexes, boANonZeros, A.localNumberOfRows, A.localNumberOfColumns,
                       bobVector, b.localLength, boxVector, x.localLength,
                       maxIter, boNorms, testNormsData.samples);
     run.wait();

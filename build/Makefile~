@@ -1,6 +1,6 @@
 # -*- Makefile -*-
 
-arch = FPGA
+arch = Linux_Serial
 setup_file = setup/Make.$(arch)
 
 include $(setup_file)
@@ -50,49 +50,13 @@ HPCG_DEPS = src/CG.o \
 PRIMARY_HEADERS = ../src/Geometry.hpp ../src/SparseMatrix.hpp ../src/Vector.hpp ../src/CGData.hpp \
                   ../src/MGData.hpp ../src/hpcg.hpp
 
-# The part below was modified for compilation on FPGA devices
-all: bin/hpcg-app
-
-hw: bin/hpcg-app src/hw.xo
-	$(VXX) -l -t hw $(VXXFLAGS) src/hw.xo -o bin/run_CG.xclbin
-
-src/hw.xo: ../src/fpga.hpp ../src/fpga.cpp $(PRIMARY_HEADERS)
-	$(VXX) -c -t hw $(VXXFLAGS) -k run_CG -I../src ../src/fpga.cpp -o src/hw.xo
-
-sw_emu: bin/hpcg-app src/sw_emu.xo bin/emconfig.json
-	$(VXX) -l -t sw_emu $(VXXFLAGS) src/sw_emu.xo -o bin/run_CG.xclbin
-
-src/sw_emu.xo: ../src/fpga.hpp ../src/fpga.cpp $(PRIMARY_HEADERS) bin/emconfig.json
-	$(VXX) -c -t sw_emu $(VXXFLAGS) -k run_CG -I../src ../src/fpga.cpp -o src/sw_emu.xo
-
-hw_emu: bin/hpcg-app src/hw_emu.xo bin/emconfig.json
-	$(VXX) -l -t hw_emu $(VXXFLAGS) src/hw_emu.xo -o bin/run_CG.xclbin
-
-src/hw_emu.xo: ../src/fpga.hpp ../src/fpga.cpp $(PRIMARY_HEADERS) bin/emconfig.json
-	$(VXX) -c -t hw_emu $(VXXFLAGS) -k run_CG -I../src ../src/fpga.cpp -o src/hw_emu.xo
-
-bin/hpcg-app: src/hpcg-app.o $(HPCG_DEPS) src/caller.o
-	$(LINKER) $(LINKFLAGS) src/hpcg-app.o src/caller.o $(XRTFLAGS) $(HPCG_DEPS) $(HPCG_LIBS) -o bin/hpcg-app
-
-src/hpcg-app.o: ../src/main.cpp $(PRIMARY_HEADERS) ../src/caller.hpp
-	$(CXX) -c $(CXXFLAGS) -I../src $< -o $@
-
-src/caller.o: ../src/caller.cpp $(PRIMARY_HEADERS) ../src/mytimer.hpp ../src/caller.hpp ../src/fpga.hpp
-	$(CXX) -c $(CXXFLAGS) -I../src $< -o $@ $(XRTFLAGS)
-
-bin/emconfig.json:
-	emconfigutil --platform $(PLATFORM)
-	mv emconfig.json bin/
-
-.PHONY: hw sw_emu hw_emu
-
-# The FPGA modifications end here
+all: bin/xhpcg
 
 bin/xhpcg: src/main.o $(HPCG_DEPS)
 	$(LINKER) $(LINKFLAGS) src/main.o $(HPCG_DEPS) $(HPCG_LIBS) -o bin/xhpcg
 
 clean:
-	rm -f *.log src/*.o src/*.xo* bin/hpcg-app bin/*.xclbin* bin/emconfig.json
+	rm -f src/*.o bin/xhpcg
 
 .PHONY: all clean
 
@@ -215,5 +179,4 @@ src/CheckAspectRatio.o: ../src/CheckAspectRatio.cpp ../src/CheckAspectRatio.hpp 
 
 src/OutputFile.o: ../src/OutputFile.cpp ../src/OutputFile.hpp $(PRIMARY_HEADERS)
 	$(CXX) -c $(CXXFLAGS) -I../src $< -o $@
-
 

@@ -25,8 +25,8 @@ void mytimer(void) {}
 #define TICK()  mytimer() //!< record current time in 't0'
 #define TOCK(t) mytimer() //!< store time difference in 't' using time in 't0'
 
-int ComputeMG(const SparseMatrix & A, const Vector & r, Vector & x) {
-    CopyVector (r, z);
+int ComputeMG(const FPGAMatrix & A, const Vector & r, Vector & x) {
+    CopyVector (r, x);
     return 0;
 }
 
@@ -67,7 +67,7 @@ int ComputeSPMV( const FPGAMatrix & A, Vector & x, Vector & y) {
   @see ComputeWAXPBY
 */
 int ComputeWAXPBY(const local_int_t n, const double alpha, const Vector & x,
-                  const double beta, const Vector & y, Vector & w) {
+                  const double beta, const Vector & y, Vector & w, bool optimized) {
 
     assert(x.localLength>=n); // Test vector lengths
     assert(y.localLength>=n);
@@ -94,7 +94,7 @@ int ComputeWAXPBY(const local_int_t n, const double alpha, const Vector & x,
   @see ComputeDotProduct
 */
 int ComputeDotProduct(const local_int_t n, const Vector & x, const Vector & y,
-                          double & result, double & time_allreduce) {
+                          double & result, double & time_allreduce, bool optimized) {
     assert(x.localLength>=n); // Test vector lengths
     assert(y.localLength>=n);
 
@@ -264,6 +264,8 @@ extern "C" {
         double normr = 0.0;
         double normr0 = 0.0;
         int niters = 0;
+        int ierr;
+        CGData data;
 
         for (int i = 0; i < numberOfCgSets; ++i) {
             ZeroVector(x); // Zero out x
