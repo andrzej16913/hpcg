@@ -246,12 +246,26 @@ extern "C" {
                  double* bValues, const int bLength, double* xValues, const int xLength,
                  const int maxIters, double* testNormsValues, const int numberOfCgSets) {
 
-#pragma HLS INTERFACE m_axi port=AValues bundle=aximm1
-#pragma HLS INTERFACE m_axi port=AIndexes bundle=aximm2
-#pragma HLS INTERFACE m_axi port=ANonZeros bundle=aximm3
-#pragma HLS INTERFACE m_axi port=bValues bundle=aximm4
-#pragma HLS INTERFACE m_axi port=xValues bundle=aximm5
-#pragma HLS INTERFACE m_axi port=testNormsValues bundle=aximm6
+#pragma HLS INTERFACE m_axi port=AValues offset=slave bundle=aximm1
+#pragma HLS INTERFACE m_axi port=AIndexes offset=slave bundle=aximm2
+#pragma HLS INTERFACE m_axi port=ANonZeros offset=slave bundle=aximm3
+#pragma HLS INTERFACE m_axi port=bValues offset=slave bundle=aximm4
+#pragma HLS INTERFACE m_axi port=xValues offset=slave bundle=aximm5
+#pragma HLS INTERFACE m_axi port=testNormsValues offset=slave bundle=aximm6
+
+#pragma HLS INTERFACE s_axilite port=AValues
+#pragma HLS INTERFACE s_axilite port=AIndexes
+#pragma HLS INTERFACE s_axilite port=ANonZeros
+#pragma HLS INTERFACE s_axilite port=NumOfRows
+#pragma HLS INTERFACE s_axilite port=NumOfColumns
+#pragma HLS INTERFACE s_axilite port=bValues
+#pragma HLS INTERFACE s_axilite port=bLength
+#pragma HLS INTERFACE s_axilite port=xValues
+#pragma HLS INTERFACE s_axilite port=xLength
+#pragma HLS INTERFACE s_axilite port=maxIters
+#pragma HLS INTERFACE s_axilite port=testNormsValues
+#pragma HLS INTERFACE s_axilite port=numberOfCgSets
+#pragma HLS INTERFACE s_axilite port=return
 
         FPGAMatrix A = constructMatrix(AValues, AIndexes, ANonZeros, NumOfRows, NumOfColumns);
         Vector b;
@@ -266,6 +280,18 @@ extern "C" {
         int niters = 0;
         int ierr;
         CGData data;
+        double r[NUM_OF_ROWS];
+        double z[NUM_OF_COLS];
+        double p[NUM_OF_COLS];
+        double Ap[NUM_OF_ROWS];
+        data.r.values = r;
+        data.z.values = z;
+        data.p.values = p;
+        data.Ap.values = Ap;
+        data.r.localLength = NumOfRows;
+        data.z.localLength = NumOfColumns;
+        data.p.localLength = NumOfColumns;
+        data.Ap.localLength = NumOfRows;
 
         for (int i = 0; i < numberOfCgSets; ++i) {
             ZeroVector(x); // Zero out x

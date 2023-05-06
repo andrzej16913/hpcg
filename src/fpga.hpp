@@ -6,12 +6,15 @@
 #ifndef HPCG_FPGA_HPP
 #define HPCG_FPGA_HPP
 
-constexpr int NX = 104;
-constexpr int NY = 104;
-constexpr int NZ = 104;
+constexpr int NX = 16;
+constexpr int NY = 16;
+constexpr int NZ = 16;
 
 // Maximum number of rows in matrix A
 constexpr long long NUM_OF_ROWS = NX * NY * NZ;
+
+// Maximum number of columns in matrix A
+constexpr long long NUM_OF_COLS = NUM_OF_ROWS;
 
 // Maximum number of non-zero values in a row in a matrix
 constexpr int MAX_ROW_LENGTH = 27;
@@ -58,7 +61,7 @@ namespace fpga {
         int i = index * MAX_ROW_LENGTH;
         row.values = matrix.values + i;
         row.indexes = matrix.indexes + i;
-        row.nonZeros = matrix.nonZeros[i];
+        row.nonZeros = matrix.nonZeros[index];
     }
 }
 
