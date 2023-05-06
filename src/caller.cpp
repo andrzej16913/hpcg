@@ -73,6 +73,7 @@ int callKernel(const SparseMatrix & A, const Vector & b, Vector & x,
     constexpr size_t ANonZerosSize = sizeof(char) * NUM_OF_ROWS;
     constexpr size_t vectorSize = sizeof(double) * NUM_OF_ROWS;
     constexpr size_t normsSize = sizeof(double) * MAX_RUN_COUNT;
+    constexpr size_t horizontalSize = sizeof(double) * NUM_OF_COLS;
 
     // Definitions of settings
     std::ostream& outStream = std::cerr;
@@ -110,7 +111,7 @@ int callKernel(const SparseMatrix & A, const Vector & b, Vector & x,
         outStream << "ERROR: Number of samples is too large: " << testNormsData.samples << std::endl;
         error = 4;
     }
-    //if (error > 0) return error;
+    if (error > 0) return error;
 
     // Prepare the device and the kernel
     outStream << "Open the device: " << device_index << std::endl;
@@ -127,11 +128,15 @@ int callKernel(const SparseMatrix & A, const Vector & b, Vector & x,
     outStream << "Allocate Buffer NonZeros in Global Memory\n";
     auto boANonZeros = xrt::bo(device, ANonZerosSize, 2);
     outStream << "Allocate Buffer vector b in Global Memory\n";
-    auto bobVector = xrt::bo(device, vectorSize,3);
+    auto bobVector = xrt::bo(device, vectorSize, 3);
     outStream << "Allocate Buffer vector x in Global Memory\n";
     auto boxVector = xrt::bo(device, vectorSize, 4);
     outStream << "Allocate Buffer norms in Global Memory\n";
     auto boNorms = xrt::bo(device, normsSize, 5);
+    auto borVector = xrt::bo(device, vectorSize, 7);
+    auto bozVector = xrt::bo(device, horizontalSize, 8);
+    auto bopVector = xrt::bo(device, horizontalSize, 9);
+    auto boApVector = xrt::bo(device, vectorSize, 10);
 
     outStream << type_name<decltype(boAValues)>() << std::endl;
 
@@ -141,6 +146,10 @@ int callKernel(const SparseMatrix & A, const Vector & b, Vector & x,
     auto boANonZerosMap = boANonZeros.map<char*>();
     auto bobVectorMap = bobVector.map<double*>();
     auto boxVectorMap = boxVector.map<double*>();
+    auto borVectorMap = borVector.map<double*>();
+    auto bozVectorMap = bozVector.map<double*>();
+    auto bopVectorMap = bopVector.map<double*>();
+    auto boApVectorMap = boApVector.map<double*>();
     auto boNormsMap = boNorms.map<double*>();
 
     outStream << type_name<decltype(boAValuesMap)>() << std::endl;
@@ -183,7 +192,7 @@ int callKernel(const SparseMatrix & A, const Vector & b, Vector & x,
     outStream << "Execution of the kernel\n";
     double startTime = mytimer();
     auto run = kernel(boAValues, boAIndexes, boANonZeros, A.localNumberOfRows, A.localNumberOfColumns,
-                      bobVector, b.localLength, boxVector, x.localLength,
+                      bobVector, boxVector, borVector, bozVector, bopVector, boApVector,
                       maxIter, boNorms, testNormsData.samples);
     run.wait();
     double stopTime = mytimer();

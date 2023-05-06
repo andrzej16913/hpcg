@@ -25,14 +25,104 @@ void mytimer(void) {}
 #define TICK()  mytimer() //!< record current time in 't0'
 #define TOCK(t) mytimer() //!< store time difference in 't' using time in 't0'
 
+/*!
+  Computes one step of symmetric Gauss-Seidel:
+
+  Assumption about the structure of matrix A:
+  - Each row 'i' of the matrix has nonzero diagonal value whose address is matrixDiagonal[i]
+  - Entries in row 'i' are ordered such that:
+       - lower triangular terms are stored before the diagonal element.
+       - upper triangular terms are stored after the diagonal element.
+       - No other assumptions are made about entry ordering.
+
+  Symmetric Gauss-Seidel notes:
+  - We use the input vector x as the RHS and start with an initial guess for y of all zeros.
+  - We perform one forward sweep.  x should be initially zero on the first GS sweep, but we do not attempt to exploit this fact.
+  - We then perform one back sweep.
+  - For simplicity we include the diagonal contribution in the for-j loop, then correct the sum after
+
+  @param[in] A the known system matrix
+  @param[in] r the input vector
+  @param[inout] x On entry, x should contain relevant values, on exit x contains the result of one symmetric GS sweep with r as the RHS.
+
+
+  @warning Early versions of this kernel (Version 1.1 and earlier) had the r and x arguments in reverse order, and out of sync with other kernels.
+
+  @return returns 0 upon success and non-zero otherwise
+
+  @see ComputeSYMGS
+*/
+int ComputeSYMGS(const FPGAMatrix & A, const Vector & r, Vector & x) {
+    const local_int_t nrow = A.localNumberOfRows;
+    const double * const rv = r.values;
+    double * const xv = x.values;
+    Row row;
+
+    for (int i = 0; i < nrow; i++) {
+        getRow(row, A, i);
+        const double * const currentValues = row.values;
+        const local_int_t * const currentColIndices = row.indexes;
+        const int currentNumberOfNonzeros = row.nonZeros;
+        double currentDiagonal = 1.0; // Dummy diagonal value
+        double sum = rv[i]; // RHS value
+
+        for (int j = 0; j < currentNumberOfNonzeros; j++) {
+            local_int_t curCol = currentColIndices[j];
+            if (curCol == i)
+                currentDiagonal = currentValues[j];
+            else
+                sum -= currentValues[j] * xv[curCol];
+        }
+        xv[i] = sum / currentDiagonal;
+    }
+
+    // Now the back sweep.
+
+    for (int i = nrow - 1; i >= 0; i--) {
+        getRow(row, A, i);
+        const double * const currentValues = row.values;
+        const local_int_t * const currentColIndices = row.indexes;
+        const int currentNumberOfNonzeros = row.nonZeros;
+        double currentDiagonal = 1.0; // Dummy diagonal value
+        double sum = rv[i]; // RHS value
+
+        for (int j = 0; j < currentNumberOfNonzeros; j++) {
+            local_int_t curCol = currentColIndices[j];
+            if (curCol == i)
+                currentDiagonal = currentValues[j];
+            else
+                sum -= currentValues[j] * xv[curCol];
+        }
+        xv[i] = sum / currentDiagonal;
+    }
+
+    return 0;
+}
+
+/*!
+  @param[in] A the known system matrix
+  @param[in] r the input vector
+  @param[inout] x On exit contains the result of the multigrid V-cycle with r as the RHS, x is the approximation to Ax = r.
+
+  @return returns 0 upon success and non-zero otherwise
+
+  @see ComputeMG
+*/
 int ComputeMG(const FPGAMatrix & A, const Vector & r, Vector & x) {
-    CopyVector (r, x);
+    //assert(x.localLength==A.localNumberOfColumns); // Make sure x contain space for halo values
+
+    ZeroVector(x); // initialize x to zero
+
+    int ierr = 0;
+    ierr = ComputeSYMGS(A, r, x);
+    if (ierr!=0) return ierr;
+
     return 0;
 }
 
 int ComputeSPMV( const FPGAMatrix & A, Vector & x, Vector & y) {
-    assert(x.localLength>=A.localNumberOfColumns); // Test vector lengths
-    assert(y.localLength>=A.localNumberOfRows);
+    //assert(x.localLength>=A.localNumberOfColumns); // Test vector lengths
+    //assert(y.localLength>=A.localNumberOfRows);
 
     const double * const xv = x.values;
     double * const yv = y.values;
@@ -69,8 +159,8 @@ int ComputeSPMV( const FPGAMatrix & A, Vector & x, Vector & y) {
 int ComputeWAXPBY(const local_int_t n, const double alpha, const Vector & x,
                   const double beta, const Vector & y, Vector & w, bool optimized) {
 
-    assert(x.localLength>=n); // Test vector lengths
-    assert(y.localLength>=n);
+    //assert(x.localLength>=n); // Test vector lengths
+    //assert(y.localLength>=n);
 
     const double * const xv = x.values;
     const double * const yv = y.values;
@@ -95,18 +185,14 @@ int ComputeWAXPBY(const local_int_t n, const double alpha, const Vector & x,
 */
 int ComputeDotProduct(const local_int_t n, const Vector & x, const Vector & y,
                           double & result, double & time_allreduce, bool optimized) {
-    assert(x.localLength>=n); // Test vector lengths
-    assert(y.localLength>=n);
+    //assert(x.localLength>=n); // Test vector lengths
+    //assert(y.localLength>=n);
 
     double local_result = 0.0;
     double * xv = x.values;
     double * yv = y.values;
 
-    if (yv==xv) {
-        for (local_int_t i=0; i<n; i++) local_result += xv[i]*xv[i];
-    } else {
-        for (local_int_t i=0; i<n; i++) local_result += xv[i]*yv[i];
-    }
+    for (local_int_t i=0; i<n; i++) local_result += xv[i]*yv[i];
 
     time_allreduce += 0.0;
     result = local_result;
@@ -137,8 +223,6 @@ int ComputeDotProduct(const local_int_t n, const Vector & x, const Vector & y,
 int CG(const FPGAMatrix & A, CGData & data, const Vector & b, Vector & x,
     const int max_iter, const double tolerance, int & niters, double & normr, double & normr0,
     bool doPreconditioning) {
-    
-    doPreconditioning = false; // for now, it must be disabled
 
     //double t_begin = mytimer();  // Start timing right away
     normr = 0.0;
@@ -243,7 +327,8 @@ int CG(const FPGAMatrix & A, CGData & data, const Vector & b, Vector & x,
 
 extern "C" {
     void run_CG (double* AValues, int* AIndexes, char* ANonZeros, const int NumOfRows, const int NumOfColumns,
-                 double* bValues, const int bLength, double* xValues, const int xLength,
+                 double* bValues, double* xValues, double* rValues,
+                 double* zValues, double* pValues, double* ApValues,
                  const int maxIters, double* testNormsValues, const int numberOfCgSets) {
 
 #pragma HLS INTERFACE m_axi port=AValues offset=slave bundle=aximm1
@@ -251,7 +336,11 @@ extern "C" {
 #pragma HLS INTERFACE m_axi port=ANonZeros offset=slave bundle=aximm3
 #pragma HLS INTERFACE m_axi port=bValues offset=slave bundle=aximm4
 #pragma HLS INTERFACE m_axi port=xValues offset=slave bundle=aximm5
-#pragma HLS INTERFACE m_axi port=testNormsValues offset=slave bundle=aximm6
+#pragma HLS INTERFACE m_axi port=rValues offset=slave bundle=aximm6
+#pragma HLS INTERFACE m_axi port=zValues offset=slave bundle=aximm7
+#pragma HLS INTERFACE m_axi port=pValues offset=slave bundle=aximm8
+#pragma HLS INTERFACE m_axi port=ApValues offset=slave bundle=aximm9
+#pragma HLS INTERFACE m_axi port=testNormsValues offset=slave bundle=aximm10
 
 #pragma HLS INTERFACE s_axilite port=AValues
 #pragma HLS INTERFACE s_axilite port=AIndexes
@@ -259,9 +348,11 @@ extern "C" {
 #pragma HLS INTERFACE s_axilite port=NumOfRows
 #pragma HLS INTERFACE s_axilite port=NumOfColumns
 #pragma HLS INTERFACE s_axilite port=bValues
-#pragma HLS INTERFACE s_axilite port=bLength
 #pragma HLS INTERFACE s_axilite port=xValues
-#pragma HLS INTERFACE s_axilite port=xLength
+#pragma HLS INTERFACE s_axilite port=rValues
+#pragma HLS INTERFACE s_axilite port=zValues
+#pragma HLS INTERFACE s_axilite port=pValues
+#pragma HLS INTERFACE s_axilite port=ApValues
 #pragma HLS INTERFACE s_axilite port=maxIters
 #pragma HLS INTERFACE s_axilite port=testNormsValues
 #pragma HLS INTERFACE s_axilite port=numberOfCgSets
@@ -270,24 +361,20 @@ extern "C" {
         FPGAMatrix A = constructMatrix(AValues, AIndexes, ANonZeros, NumOfRows, NumOfColumns);
         Vector b;
         b.values = bValues;
-        b.localLength = bLength;
+        b.localLength = NumOfRows;
         Vector x;
         x.values = xValues;
-        x.localLength = xLength;
+        x.localLength = NumOfRows;
         double optTolerance = 0.0;  // Force maxIters iterations
         double normr = 0.0;
         double normr0 = 0.0;
         int niters = 0;
         int ierr;
         CGData data;
-        double r[NUM_OF_ROWS];
-        double z[NUM_OF_COLS];
-        double p[NUM_OF_COLS];
-        double Ap[NUM_OF_ROWS];
-        data.r.values = r;
-        data.z.values = z;
-        data.p.values = p;
-        data.Ap.values = Ap;
+        data.r.values = rValues;
+        data.z.values = zValues;
+        data.p.values = pValues;
+        data.Ap.values = ApValues;
         data.r.localLength = NumOfRows;
         data.z.localLength = NumOfColumns;
         data.p.localLength = NumOfColumns;
