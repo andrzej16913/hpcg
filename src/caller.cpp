@@ -65,7 +65,7 @@ type_name()
 
 int callKernel(const SparseMatrix & A, const Vector & b, Vector & x,
                const int maxIter, TestNormsData testNormsData,
-               std::vector<double> times, bool doPreconditioning) {
+               std::vector<double>& times, bool doPreconditioning) {
 
     // Computing sizes of buffers
     constexpr size_t AValuesSize = sizeof(double) * MATRIX_SIZE;
@@ -78,7 +78,7 @@ int callKernel(const SparseMatrix & A, const Vector & b, Vector & x,
     // Definitions of settings
     std::ostream& outStream = std::cerr;
     std::string binaryFile = "./run_CG.xclbin";
-    int device_index = 0;
+    int device_index = 1;
     int error = 0;
 
     outStream << AValuesSize << std::endl;

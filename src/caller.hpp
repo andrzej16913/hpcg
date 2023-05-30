@@ -27,6 +27,6 @@
 
 int callKernel(const SparseMatrix& A, const Vector& b, Vector& x,
                 const int maxIter, TestNormsData testNormsData,
-                std::vector<double> times, bool doPreconditioning);
+                std::vector<double>& times, bool doPreconditioning);
 
 #endif //HPCG_CALLER_HPP

@@ -71,7 +71,7 @@ int ComputeSYMGS(const FPGAMatrix & A, const Vector & r, Vector & x) {
             if (curCol == i)
                 currentDiagonal = currentValues[j];
             else
-                sum -= currentValues[j] * xv[curCol];
+                sum = rv[i] - currentValues[j] * xv[curCol];
         }
         xv[i] = sum / currentDiagonal;
     }
@@ -91,7 +91,7 @@ int ComputeSYMGS(const FPGAMatrix & A, const Vector & r, Vector & x) {
             if (curCol == i)
                 currentDiagonal = currentValues[j];
             else
-                sum -= currentValues[j] * xv[curCol];
+                sum = rv[i] - currentValues[j] * xv[curCol];
         }
         xv[i] = sum / currentDiagonal;
     }
@@ -166,11 +166,57 @@ int ComputeWAXPBY(const local_int_t n, const double alpha, const Vector & x,
     const double * const yv = y.values;
     double * const wv = w.values;
 
-    for (local_int_t i=0; i<n; i++) wv[i] = alpha * xv[i] + beta * yv[i];
+    for (local_int_t i=0; i<n; i++)
+        wv[i] = alpha * xv[i] + beta * yv[i];
 
     return 0;
 }
 
+int ComputeWAXPBY_A(const local_int_t n, const double alpha, const Vector & x,
+                  const double beta, const Vector & y, Vector & w, bool optimized) {
+    const double * const xv = x.values;
+    const double * const yv = y.values;
+    double * const wv = w.values;
+    for (local_int_t i=0; i<n; i++)
+    	wv[i] = alpha * xv[i] + beta * yv[i];
+    return 0;
+}
+int ComputeWAXPBY_B(const local_int_t n, const double alpha, const Vector & x,
+                  const double beta, const Vector & y, Vector & w, bool optimized) {
+    const double * const xv = x.values;
+    const double * const yv = y.values;
+    double * const wv = w.values;
+    for (local_int_t i=0; i<n; i++)
+    	wv[i] = alpha * xv[i] + beta * yv[i];
+    return 0;
+}
+int ComputeWAXPBY_C(const local_int_t n, const double alpha, const Vector & x,
+                  const double beta, const Vector & y, Vector & w, bool optimized) {
+    const double * const xv = x.values;
+    const double * const yv = y.values;
+    double * const wv = w.values;
+    for (local_int_t i=0; i<n; i++)
+    	wv[i] = alpha * xv[i] + beta * yv[i];
+    return 0;
+}
+int ComputeWAXPBY_D(const local_int_t n, const double alpha, const Vector & x,
+                  const double beta, const Vector & y, Vector & w, bool optimized) {
+    const double * const xv = x.values;
+    const double * const yv = y.values;
+    double * const wv = w.values;
+    for (local_int_t i=0; i<n; i++)
+    	wv[i] = alpha * xv[i] + beta * yv[i];
+    return 0;
+}
+int ComputeWAXPBY_E(const local_int_t n, const double alpha, const Vector & x,
+                  const double beta, const Vector & y, Vector & w, bool optimized) {
+    const double * const xv = x.values;
+    const double * const yv = y.values;
+    double * const wv = w.values;
+    for (local_int_t i=0; i<n; i++)
+    	wv[i] = alpha * xv[i] + beta * yv[i];
+    return 0;
+}
 /*!
   Routine to compute the dot product of two vectors where:
 
@@ -188,14 +234,60 @@ int ComputeDotProduct(const local_int_t n, const Vector & x, const Vector & y,
     //assert(x.localLength>=n); // Test vector lengths
     //assert(y.localLength>=n);
 
-    double local_result = 0.0;
     double * xv = x.values;
     double * yv = y.values;
+    /*double tmp[8];
 
-    for (local_int_t i=0; i<n; i++) local_result += xv[i]*yv[i];
+    for (int j = 0; j < 8; j++) {
+        tmp[j] = 0.0;
+    }
+
+    for (local_int_t i=0; i<n; i += 8) {
+        for (int j = 0; j < 8; ++j) {
+            tmp[j] += xv[i+j] * yv[i+j];
+        }
+    }
+
+    tmp[0] += tmp[1];
+    tmp[2] += tmp[3];
+    tmp[4] += tmp[5];
+    tmp[6] += tmp[7];
+
+    tmp[0] += tmp[2];
+    tmp[4] += tmp[6];
 
     time_allreduce += 0.0;
-    result = local_result;
+    result = tmp[0] + tmp[4];*/
+
+    double tmp0 = 0.0;
+    double tmp1 = 0.0;
+    double tmp2 = 0.0;
+    double tmp3 = 0.0;
+    double tmp4 = 0.0;
+    double tmp5 = 0.0;
+    double tmp6 = 0.0;
+    double tmp7 = 0.0;
+
+    for (local_int_t i=0; i<n; i += 8) {
+        tmp0 += xv[i] * yv[i];
+        tmp1 += xv[i + 1] * yv[i + 1];
+        tmp2 += xv[i + 2] * yv[i + 2];
+        tmp3 += xv[i + 3] * yv[i + 3];
+        tmp4 += xv[i + 4] * yv[i + 4];
+        tmp5 += xv[i + 5] * yv[i + 5];
+        tmp6 += xv[i + 6] * yv[i + 6];
+        tmp7 += xv[i + 7] * yv[i + 7];
+    }
+
+    tmp0 += tmp1;
+    tmp2 += tmp3;
+    tmp4 += tmp5;
+    tmp6 += tmp7;
+
+    tmp0 += tmp2;
+    tmp4 += tmp6;
+
+    result = tmp0 + tmp4;
 
     return 0;
 }
@@ -246,7 +338,7 @@ int CG(const FPGAMatrix & A, CGData & data, const Vector & b, Vector & x,
     // p is of length ncols, copy x to p for sparse MV operation
     CopyVector(x, p);
     TICK(); ComputeSPMV(A, p, Ap); TOCK(t3); // Ap = A*p
-    TICK(); ComputeWAXPBY(nrow, 1.0, b, -1.0, Ap, r, A.isWaxpbyOptimized);  TOCK(t2); // r = b - Ax (x stored in p)
+    TICK(); ComputeWAXPBY_A(nrow, 1.0, b, -1.0, Ap, r, A.isWaxpbyOptimized);  TOCK(t2); // r = b - Ax (x stored in p)
     TICK(); ComputeDotProduct(nrow, r, r, normr, t4, A.isDotProductOptimized); TOCK(t1);
     normr = sqrt(normr);
 #ifdef HPCG_DEBUG
@@ -267,20 +359,20 @@ int CG(const FPGAMatrix & A, CGData & data, const Vector & b, Vector & x,
         TOCK(t5); // Preconditioner apply time
 
         if (k == 1) {
-            TICK(); ComputeWAXPBY(nrow, 1.0, z, 0.0, z, p, A.isWaxpbyOptimized); TOCK(t2); // Copy Mr to p
-            TICK(); ComputeDotProduct (nrow, r, z, rtz, t4, A.isDotProductOptimized); TOCK(t1); // rtz = r'*z
+            TICK(); ComputeWAXPBY_B(nrow, 1.0, z, 0.0, z, p, A.isWaxpbyOptimized); TOCK(t2); // Copy Mr to p
+            TICK(); ComputeDotProduct(nrow, r, z, rtz, t4, A.isDotProductOptimized); TOCK(t1); // rtz = r'*z
         } else {
             oldrtz = rtz;
-            TICK(); ComputeDotProduct (nrow, r, z, rtz, t4, A.isDotProductOptimized); TOCK(t1); // rtz = r'*z
+            TICK(); ComputeDotProduct(nrow, r, z, rtz, t4, A.isDotProductOptimized); TOCK(t1); // rtz = r'*z
             beta = rtz/oldrtz;
-            TICK(); ComputeWAXPBY (nrow, 1.0, z, beta, p, p, A.isWaxpbyOptimized);  TOCK(t2); // p = beta*p + z
+            TICK(); ComputeWAXPBY_C(nrow, 1.0, z, beta, p, p, A.isWaxpbyOptimized);  TOCK(t2); // p = beta*p + z
         }
 
         TICK(); ComputeSPMV(A, p, Ap); TOCK(t3); // Ap = A*p
         TICK(); ComputeDotProduct(nrow, p, Ap, pAp, t4, A.isDotProductOptimized); TOCK(t1); // alpha = p'*Ap
         alpha = rtz/pAp;
-        TICK(); ComputeWAXPBY(nrow, 1.0, x, alpha, p, x, A.isWaxpbyOptimized);// x = x + alpha*p
-                ComputeWAXPBY(nrow, 1.0, r, -alpha, Ap, r, A.isWaxpbyOptimized);  TOCK(t2);// r = r - alpha*Ap
+        TICK(); ComputeWAXPBY_D(nrow, 1.0, x, alpha, p, x, A.isWaxpbyOptimized);// x = x + alpha*p
+                ComputeWAXPBY_E(nrow, 1.0, r, -alpha, Ap, r, A.isWaxpbyOptimized);  TOCK(t2);// r = r - alpha*Ap
         TICK(); ComputeDotProduct(nrow, r, r, normr, t4, A.isDotProductOptimized); TOCK(t1);
         normr = sqrt(normr);
         #ifdef HPCG_DEBUG

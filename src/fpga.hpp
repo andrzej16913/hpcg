@@ -6,9 +6,9 @@
 #ifndef HPCG_FPGA_HPP
 #define HPCG_FPGA_HPP
 
-constexpr int NX = 16;
-constexpr int NY = 16;
-constexpr int NZ = 16;
+constexpr int NX = 104;
+constexpr int NY = 104;
+constexpr int NZ = 104;
 
 // Maximum number of rows in matrix A
 constexpr long long NUM_OF_ROWS = NX * NY * NZ;
