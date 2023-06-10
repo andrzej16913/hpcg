@@ -1,0 +1,7 @@
+bin/
+src/
+testing/
+.Xil/
+_x/
+.ipcache
+*.jou

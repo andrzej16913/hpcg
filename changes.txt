@@ -1,0 +1,10 @@
+File fpga.hpp contains constants necessary for compilation for FPGA.
+CG.cpp and other computation functions were copied into new file fpga.cpp,
+which contains main kernel.
+Preparing and running kernel happens in new file caller.cpp.
+
+Makefile was copied and edited manually to make FPGA compilation possible.
+New target Make.FPGA was also created and special variables were defined.
+
+For now, only whole kernel runtime is measured.
+
