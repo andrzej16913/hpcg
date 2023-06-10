@@ -25,6 +25,36 @@ void mytimer(void) {}
 #define TICK()  mytimer() //!< record current time in 't0'
 #define TOCK(t) mytimer() //!< store time difference in 't' using time in 't0'
 
+double SYMGS_step(const FPGAMatrix& A, double* const xv, double rhs, int i) {
+    Row row;
+    getRow(row, A, i);
+    const double * const currentValues = row.values;
+    const local_int_t * const currentColIndices = row.indexes;
+    const int currentNumberOfNonzeros = row.nonZeros;
+    double currentDiagonal = 1.0; // Dummy diagonal value
+    double sum = rhs; // RHS value
+    double tmp[27];
+    double dummy = 0.0;
+
+    for (int j = 0; j < currentNumberOfNonzeros; j++) {
+        local_int_t curCol = currentColIndices[j];
+        dummy = currentValues[j];
+        if (curCol == i) {
+            currentDiagonal = dummy;
+            dummy = 0.0;
+        } else {
+            dummy *= xv[curCol];
+        }
+        tmp[j] = dummy;
+    }
+
+    for (int j = 0; j < currentNumberOfNonzeros; j++ ) {
+        sum -= tmp[j];
+    }
+
+    return sum / currentDiagonal;
+}
+
 /*!
   Computes one step of symmetric Gauss-Seidel:
 
@@ -56,44 +86,15 @@ int ComputeSYMGS(const FPGAMatrix & A, const Vector & r, Vector & x) {
     const local_int_t nrow = A.localNumberOfRows;
     const double * const rv = r.values;
     double * const xv = x.values;
-    Row row;
 
     for (int i = 0; i < nrow; i++) {
-        getRow(row, A, i);
-        const double * const currentValues = row.values;
-        const local_int_t * const currentColIndices = row.indexes;
-        const int currentNumberOfNonzeros = row.nonZeros;
-        double currentDiagonal = 1.0; // Dummy diagonal value
-        double sum = rv[i]; // RHS value
-
-        for (int j = 0; j < currentNumberOfNonzeros; j++) {
-            local_int_t curCol = currentColIndices[j];
-            if (curCol == i)
-                currentDiagonal = currentValues[j];
-            else
-                sum = rv[i] - currentValues[j] * xv[curCol];
-        }
-        xv[i] = sum / currentDiagonal;
+        xv[i] = SYMGS_step(A, xv, rv[i], i);
     }
 
     // Now the back sweep.
 
     for (int i = nrow - 1; i >= 0; i--) {
-        getRow(row, A, i);
-        const double * const currentValues = row.values;
-        const local_int_t * const currentColIndices = row.indexes;
-        const int currentNumberOfNonzeros = row.nonZeros;
-        double currentDiagonal = 1.0; // Dummy diagonal value
-        double sum = rv[i]; // RHS value
-
-        for (int j = 0; j < currentNumberOfNonzeros; j++) {
-            local_int_t curCol = currentColIndices[j];
-            if (curCol == i)
-                currentDiagonal = currentValues[j];
-            else
-                sum = rv[i] - currentValues[j] * xv[curCol];
-        }
-        xv[i] = sum / currentDiagonal;
+        xv[i] = SYMGS_step(A, xv, rv[i], i);
     }
 
     return 0;
@@ -109,9 +110,7 @@ int ComputeSYMGS(const FPGAMatrix & A, const Vector & r, Vector & x) {
   @see ComputeMG
 */
 int ComputeMG(const FPGAMatrix & A, const Vector & r, Vector & x) {
-    //assert(x.localLength==A.localNumberOfColumns); // Make sure x contain space for halo values
-
-    ZeroVector(x); // initialize x to zero
+     ZeroVector(x); // initialize x to zero
 
     int ierr = 0;
     ierr = ComputeSYMGS(A, r, x);
@@ -121,13 +120,11 @@ int ComputeMG(const FPGAMatrix & A, const Vector & r, Vector & x) {
 }
 
 int ComputeSPMV( const FPGAMatrix & A, Vector & x, Vector & y) {
-    //assert(x.localLength>=A.localNumberOfColumns); // Test vector lengths
-    //assert(y.localLength>=A.localNumberOfRows);
-
     const double * const xv = x.values;
     double * const yv = y.values;
     const local_int_t nrow = A.localNumberOfRows;
     Row row;
+    double tmp[27];
 
     for (local_int_t i=0; i< nrow; i++)  {
         getRow(row, A, i);
@@ -136,8 +133,13 @@ int ComputeSPMV( const FPGAMatrix & A, Vector & x, Vector & y) {
         const local_int_t * const cur_inds = row.indexes;
         const int cur_nnz = row.nonZeros;
 
+        for (int j=0; j < cur_nnz; j++) {
+            tmp[j] = cur_vals[j] * xv[cur_inds[j]];
+        }
+
         for (int j=0; j< cur_nnz; j++)
-            sum += cur_vals[j]*xv[cur_inds[j]];
+            sum += tmp[j];
+
         yv[i] = sum;
     }
     return 0;
@@ -159,9 +161,6 @@ int ComputeSPMV( const FPGAMatrix & A, Vector & x, Vector & y) {
 int ComputeWAXPBY(const local_int_t n, const double alpha, const Vector & x,
                   const double beta, const Vector & y, Vector & w, bool optimized) {
 
-    //assert(x.localLength>=n); // Test vector lengths
-    //assert(y.localLength>=n);
-
     const double * const xv = x.values;
     const double * const yv = y.values;
     double * const wv = w.values;
@@ -172,51 +171,6 @@ int ComputeWAXPBY(const local_int_t n, const double alpha, const Vector & x,
     return 0;
 }
 
-int ComputeWAXPBY_A(const local_int_t n, const double alpha, const Vector & x,
-                  const double beta, const Vector & y, Vector & w, bool optimized) {
-    const double * const xv = x.values;
-    const double * const yv = y.values;
-    double * const wv = w.values;
-    for (local_int_t i=0; i<n; i++)
-    	wv[i] = alpha * xv[i] + beta * yv[i];
-    return 0;
-}
-int ComputeWAXPBY_B(const local_int_t n, const double alpha, const Vector & x,
-                  const double beta, const Vector & y, Vector & w, bool optimized) {
-    const double * const xv = x.values;
-    const double * const yv = y.values;
-    double * const wv = w.values;
-    for (local_int_t i=0; i<n; i++)
-    	wv[i] = alpha * xv[i] + beta * yv[i];
-    return 0;
-}
-int ComputeWAXPBY_C(const local_int_t n, const double alpha, const Vector & x,
-                  const double beta, const Vector & y, Vector & w, bool optimized) {
-    const double * const xv = x.values;
-    const double * const yv = y.values;
-    double * const wv = w.values;
-    for (local_int_t i=0; i<n; i++)
-    	wv[i] = alpha * xv[i] + beta * yv[i];
-    return 0;
-}
-int ComputeWAXPBY_D(const local_int_t n, const double alpha, const Vector & x,
-                  const double beta, const Vector & y, Vector & w, bool optimized) {
-    const double * const xv = x.values;
-    const double * const yv = y.values;
-    double * const wv = w.values;
-    for (local_int_t i=0; i<n; i++)
-    	wv[i] = alpha * xv[i] + beta * yv[i];
-    return 0;
-}
-int ComputeWAXPBY_E(const local_int_t n, const double alpha, const Vector & x,
-                  const double beta, const Vector & y, Vector & w, bool optimized) {
-    const double * const xv = x.values;
-    const double * const yv = y.values;
-    double * const wv = w.values;
-    for (local_int_t i=0; i<n; i++)
-    	wv[i] = alpha * xv[i] + beta * yv[i];
-    return 0;
-}
 /*!
   Routine to compute the dot product of two vectors where:
 
@@ -231,12 +185,10 @@ int ComputeWAXPBY_E(const local_int_t n, const double alpha, const Vector & x,
 */
 int ComputeDotProduct(const local_int_t n, const Vector & x, const Vector & y,
                           double & result, double & time_allreduce, bool optimized) {
-    //assert(x.localLength>=n); // Test vector lengths
-    //assert(y.localLength>=n);
 
     double * xv = x.values;
     double * yv = y.values;
-    /*double tmp[8];
+/*    double tmp[8];
 
     for (int j = 0; j < 8; j++) {
         tmp[j] = 0.0;
@@ -257,8 +209,8 @@ int ComputeDotProduct(const local_int_t n, const Vector & x, const Vector & y,
     tmp[4] += tmp[6];
 
     time_allreduce += 0.0;
-    result = tmp[0] + tmp[4];*/
-
+    result = tmp[0] + tmp[4];
+*/
     double tmp0 = 0.0;
     double tmp1 = 0.0;
     double tmp2 = 0.0;
@@ -312,11 +264,10 @@ int ComputeDotProduct(const local_int_t n, const Vector & x, const Vector & y,
 
   @see CG_ref()
 */
-int CG(const FPGAMatrix & A, CGData & data, const Vector & b, Vector & x,
+int CG(const FPGAMatrix & A, CGData & data, const Vector & b, Vector & x, Vector& r2, Vector& p2,
     const int max_iter, const double tolerance, int & niters, double & normr, double & normr0,
     bool doPreconditioning) {
 
-    //double t_begin = mytimer();  // Start timing right away
     normr = 0.0;
     double rtz = 0.0, oldrtz = 0.0, alpha = 0.0, beta = 0.0, pAp = 0.0;
 
@@ -328,22 +279,12 @@ int CG(const FPGAMatrix & A, CGData & data, const Vector & b, Vector & x,
     Vector & p = data.p; // Direction vector (in MPI mode ncol>=nrow)
     Vector & Ap = data.Ap;
 
-    //if (!doPreconditioning && A.geom->rank==0) HPCG_fout << "WARNING: PERFORMING UNPRECONDITIONED ITERATIONS" << std::endl;
-
-#ifdef HPCG_DEBUG
-    int print_freq = 1;
-    if (print_freq>50) print_freq=50;
-    if (print_freq<1)  print_freq=1;
-#endif
     // p is of length ncols, copy x to p for sparse MV operation
     CopyVector(x, p);
     TICK(); ComputeSPMV(A, p, Ap); TOCK(t3); // Ap = A*p
-    TICK(); ComputeWAXPBY_A(nrow, 1.0, b, -1.0, Ap, r, A.isWaxpbyOptimized);  TOCK(t2); // r = b - Ax (x stored in p)
+    TICK(); ComputeWAXPBY(nrow, 1.0, b, -1.0, Ap, r, A.isWaxpbyOptimized);  TOCK(t2); // r = b - Ax (x stored in p)
     TICK(); ComputeDotProduct(nrow, r, r, normr, t4, A.isDotProductOptimized); TOCK(t1);
     normr = sqrt(normr);
-#ifdef HPCG_DEBUG
-    if (A.geom->rank==0) HPCG_fout << "Initial Residual = "<< normr << std::endl;
-#endif
 
     // Record initial residual for convergence testing
     normr0 = normr;
@@ -359,20 +300,22 @@ int CG(const FPGAMatrix & A, CGData & data, const Vector & b, Vector & x,
         TOCK(t5); // Preconditioner apply time
 
         if (k == 1) {
-            TICK(); ComputeWAXPBY_B(nrow, 1.0, z, 0.0, z, p, A.isWaxpbyOptimized); TOCK(t2); // Copy Mr to p
+            TICK(); ComputeWAXPBY(nrow, 1.0, z, 0.0, z, p, A.isWaxpbyOptimized); TOCK(t2); // Copy Mr to p
             TICK(); ComputeDotProduct(nrow, r, z, rtz, t4, A.isDotProductOptimized); TOCK(t1); // rtz = r'*z
         } else {
             oldrtz = rtz;
             TICK(); ComputeDotProduct(nrow, r, z, rtz, t4, A.isDotProductOptimized); TOCK(t1); // rtz = r'*z
             beta = rtz/oldrtz;
-            TICK(); ComputeWAXPBY_C(nrow, 1.0, z, beta, p, p, A.isWaxpbyOptimized);  TOCK(t2); // p = beta*p + z
+            ComputeWAXPBY(nrow, 1.0, z, beta, p, p2, A.isWaxpbyOptimized);  TOCK(t2); // p = beta*p + z
+            CopyVector(p2, p); // p2 is used as buffer, it speeds up computation a bit
         }
 
         TICK(); ComputeSPMV(A, p, Ap); TOCK(t3); // Ap = A*p
         TICK(); ComputeDotProduct(nrow, p, Ap, pAp, t4, A.isDotProductOptimized); TOCK(t1); // alpha = p'*Ap
         alpha = rtz/pAp;
-        TICK(); ComputeWAXPBY_D(nrow, 1.0, x, alpha, p, x, A.isWaxpbyOptimized);// x = x + alpha*p
-                ComputeWAXPBY_E(nrow, 1.0, r, -alpha, Ap, r, A.isWaxpbyOptimized);  TOCK(t2);// r = r - alpha*Ap
+        TICK(); ComputeWAXPBY(nrow, 1.0, x, alpha, p, x, A.isWaxpbyOptimized);// x = x + alpha*p
+                ComputeWAXPBY(nrow, 1.0, r, -alpha, Ap, r2, A.isWaxpbyOptimized);  TOCK(t2);// r = r - alpha*Ap
+                CopyVector(r2, r); // same as above
         TICK(); ComputeDotProduct(nrow, r, r, normr, t4, A.isDotProductOptimized); TOCK(t1);
         normr = sqrt(normr);
         #ifdef HPCG_DEBUG
@@ -382,16 +325,7 @@ int CG(const FPGAMatrix & A, CGData & data, const Vector & b, Vector & x,
         niters = k;
     }
 
-    // Store times
-    //times[1] += t1; // dot-product time
-    //times[2] += t2; // WAXPBY time
-    //times[3] += t3; // SPMV time
-    //times[4] += t4; // AllReduce time
-    //times[5] += t5; // preconditioner apply time
-    //#ifndef HPCG_NO_MPI
-    //  times[6] += t6; // exchange halo time
-    //#endif
-   // times[0] += mytimer() - t_begin;  // Total time. All done...
+
     return 0;
 }
 
@@ -421,6 +355,7 @@ extern "C" {
     void run_CG (double* AValues, int* AIndexes, char* ANonZeros, const int NumOfRows, const int NumOfColumns,
                  double* bValues, double* xValues, double* rValues,
                  double* zValues, double* pValues, double* ApValues,
+                 double* r2Values, double* p2Values, bool doPreconditioning,
                  const int maxIters, double* testNormsValues, const int numberOfCgSets) {
 
 #pragma HLS INTERFACE m_axi port=AValues offset=slave bundle=aximm1
@@ -432,7 +367,9 @@ extern "C" {
 #pragma HLS INTERFACE m_axi port=zValues offset=slave bundle=aximm7
 #pragma HLS INTERFACE m_axi port=pValues offset=slave bundle=aximm8
 #pragma HLS INTERFACE m_axi port=ApValues offset=slave bundle=aximm9
-#pragma HLS INTERFACE m_axi port=testNormsValues offset=slave bundle=aximm10
+#pragma HLS INTERFACE m_axi port=r2Values offset=slave bundle=aximm10
+#pragma HLS INTERFACE m_axi port=p2Values offset=slave bundle=aximm11
+#pragma HLS INTERFACE m_axi port=testNormsValues offset=slave bundle=aximm12
 
 #pragma HLS INTERFACE s_axilite port=AValues
 #pragma HLS INTERFACE s_axilite port=AIndexes
@@ -445,6 +382,9 @@ extern "C" {
 #pragma HLS INTERFACE s_axilite port=zValues
 #pragma HLS INTERFACE s_axilite port=pValues
 #pragma HLS INTERFACE s_axilite port=ApValues
+#pragma HLS INTERFACE s_axilite port=r2Values
+#pragma HLS INTERFACE s_axilite port=p2Values
+#pragma HLS INTERFACE x_axilite port=doPreconditioning
 #pragma HLS INTERFACE s_axilite port=maxIters
 #pragma HLS INTERFACE s_axilite port=testNormsValues
 #pragma HLS INTERFACE s_axilite port=numberOfCgSets
@@ -472,11 +412,16 @@ extern "C" {
         data.p.localLength = NumOfColumns;
         data.Ap.localLength = NumOfRows;
 
+        Vector r2;
+        r2.values = r2Values;
+        r2.localLength = NumOfRows;
+        Vector p2;
+        p2.values = p2Values;
+        p2.localLength = NumOfColumns;
+
         for (int i = 0; i < numberOfCgSets; ++i) {
             ZeroVector(x); // Zero out x
-            ierr = CG( A, data, b, x, maxIters, optTolerance, niters, normr, normr0, true);
-            //if (ierr) HPCG_fout << "Error in call to CG: " << ierr << ".\n" << endl;
-            //if (rank==0) HPCG_fout << "Call [" << i << "] Scaled Residual [" << normr/normr0 << "]" << endl;
+            ierr = CG( A, data, b, x, r2, p2, maxIters, optTolerance, niters, normr, normr0, doPreconditioning);
             testNormsValues[i] = normr/normr0; // Record scaled residual from this run
         }
     }

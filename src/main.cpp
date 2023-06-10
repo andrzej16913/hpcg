@@ -345,7 +345,7 @@ int main(int argc, char * argv[]) {
   }
    */
 
-  std::cerr << "Calling kernel, rank: " << rank << std::endl;
+  // Main computation is redirected to FPGA device
   callKernel(A, b, x, optMaxIters, testnorms_data, times, true);
 
   // Compute difference between known exact solution and computed solution
