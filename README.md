@@ -2,11 +2,25 @@
 # High Performance Conjugate Gradient Benchmark (HPCG) #
 ########################################################
 
-Jack Dongarra and Michael Heroux and Piotr Luszczek
+Authors of original HPCG benchmark: Jack Dongarra and Michael Heroux and Piotr Luszczek
 
-Revision: 3.1
+It can be found here: https://github.com/hpcg-benchmark/hpcg
 
-Date: March 28, 2019
+This program is an attempt to port HPCG to Xilinx Alveo U280 accelerator card keeping code 
+relatively close to original one.
+
+To compile this benchmark go to `build` directory and run either `make sw_emu`,
+`make hw_emu` or `make hw`. It will create software emulation, hardware emulation or
+haredware version respectively. WARNING: Compiling for hardware takes over 2 hours!
+It may be necessary to edit section `FPGA specific flags` in file `build/setup/Make.FPGA`
+depending on your platform and installation location.
+
+To run benchmark go to `build/bin` directory and run `hpcg-app`.
+
+Most of the code designed to run on FPGA board is the file `fpga.cpp`.
+`caller.cpp` is a file with code needed to prepare buffers, data and kernel.
+
+Original HPCG README below.
 
 ## Introduction ##
 
